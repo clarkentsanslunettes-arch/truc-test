@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mon Patrimoine">
+<meta name="theme-color" content="#f2f2ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f0e" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Mon Patrimoine</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f2f2ef; --surface:#fcfcfb; --surface2:#f0efec; --text:#0b0b0b; --text2:#52514e; --muted:#7a7974; --line:#e4e3df;
+  --accent:#2a78d6; --accent-ink:#1c5cab;
+  --c-banque:#2a78d6; --c-bourse:#eb6834; --c-societe:#1baf7a; --c-crypto:#eda100;
+  --good:#006300; --bad:#d03b3b;
+  --radius:18px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#0f0f0e; --surface:#1a1a19; --surface2:#242423; --text:#f0efec; --text2:#c3c2b7; --muted:#8f8e86; --line:#2e2e2c;
+    --accent:#3987e5; --accent-ink:#86b6ef;
+    --c-banque:#3987e5; --c-bourse:#d95926; --c-societe:#199e70; --c-crypto:#c98500;
+    --good:#0ca30c; --bad:#e66767;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+main{max-width:560px;margin:0 auto;padding:8px 16px calc(110px + env(safe-area-inset-bottom));transition:filter .15s}
+body.veil main,body.veil .sheet-wrap{filter:blur(24px)}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:10px;padding:10px 0 4px}
+.logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(150deg,#256abf,#0d2a55);color:#fff;font-weight:800;font-size:13px;letter-spacing:-.3px;display:grid;place-items:center}
+.brand{font-weight:700;font-size:17px;flex:1}
+.icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:var(--text2);background:var(--surface);border:1px solid var(--line)}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* hero */
+.hero{padding:18px 4px 14px}
+.hero .label{color:var(--text2);font-size:14px;font-weight:500}
+.hero .total{font-size:42px;font-weight:750;letter-spacing:-1px;margin:2px 0 4px;line-height:1.1}
+.delta{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.delta.up{color:var(--good)} .delta.down{color:var(--bad)} .delta.flat{color:var(--text2)}
+.delta .since{color:var(--muted);font-weight:500}
+.updated{color:var(--muted);font-size:12.5px;margin-top:6px}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:12px 0}
+.card h2{font-size:15px;margin:0;font-weight:650}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.seg{display:flex;background:var(--surface2);border-radius:10px;padding:2px}
+.seg button{padding:5px 10px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text2)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.chart{position:relative;user-select:none;-webkit-user-select:none}
+.chart svg{display:block;width:100%;overflow:visible;touch-action:pan-y}
+.axis{fill:var(--muted);font-size:11px}
+.grid{stroke:var(--line);stroke-width:1}
+.tip{position:absolute;top:0;pointer-events:none;background:var(--text);color:var(--surface);border-radius:10px;padding:6px 9px;font-size:12.5px;line-height:1.3;white-space:nowrap;transform:translateX(-50%);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.tip b{font-size:14px}
+.empty-chart{color:var(--muted);font-size:14px;padding:22px 6px;text-align:center}
+
+/* donut */
+.donut-row{display:flex;align-items:center;gap:16px}
+.donut{flex:0 0 150px}
+.donut svg{display:block;width:150px;height:150px}
+.donut circle.seg-c{cursor:pointer;transition:stroke-width .15s}
+.legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.leg{display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:8px;padding:6px 6px;border-radius:10px;text-align:left}
+.leg.on{background:var(--surface2)}
+.dot{width:10px;height:10px;border-radius:3px}
+.leg .n{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leg .v{font-size:13px;text-align:right}
+.leg .v small{display:block;color:var(--muted);font-size:12px}
+
+/* accounts */
+.cat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin:12px 0;overflow:hidden}
+.cat-head{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
+.cat-head .dot{width:12px;height:12px;border-radius:4px}
+.cat-head h3{margin:0;font-size:16px;flex:1}
+.cat-head .sum{font-weight:700}
+.cat-head .pct{color:var(--muted);font-size:13px;margin-left:6px;font-weight:500}
+.acc{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;border-top:1px solid var(--line);text-align:left}
+.acc .main{flex:1;min-width:0}
+.acc .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc .sub{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc .val{font-weight:650;text-align:right}
+.acc .val small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.add-line{display:flex;align-items:center;gap:8px;width:100%;padding:12px 16px;border-top:1px solid var(--line);color:var(--accent);font-weight:600;font-size:15px}
+.welcome{text-align:center;padding:24px 16px}
+.welcome p{color:var(--text2);margin:6px 0 16px}
+
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));background:var(--accent);color:#fff;font-weight:700;padding:14px 22px;border-radius:999px;box-shadow:0 8px 24px rgba(20,60,120,.35);display:flex;align-items:center;gap:8px;z-index:5}
+
+/* sheet */
+.sheet-wrap{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.38);animation:fade .18s}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;animation:up .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+@keyframes fade{from{opacity:0}}
+.sheet-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px}
+.sheet-bar h2{font-size:17px;margin:0}
+.sheet-bar button{color:var(--accent);font-weight:600;min-width:64px}
+.sheet-bar button.r{text-align:right;font-weight:700}
+.sheet-body{overflow:auto;padding:4px 16px calc(24px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin:10px 0;overflow:hidden}
+.group-title{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:18px 4px 6px;font-weight:600}
+.field{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+.field:first-child{border-top:0}
+.field label{flex:0 0 auto;color:var(--text2);font-size:15px}
+.field input{flex:1;min-width:0;border:0;background:none;outline:none;text-align:right;font-size:16px}
+.field input.left{text-align:left}
+.hint{color:var(--muted);font-size:13px;margin:6px 4px 0;line-height:1.45}
+.hint a{color:var(--accent)}
+.cats-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--surface2);padding:3px;border-radius:12px}
+.cats-pick button{padding:9px 2px;border-radius:9px;font-size:13px;font-weight:600;color:var(--text2)}
+.cats-pick button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.pos{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:11px 14px;border-top:1px solid var(--line);align-items:center}
+.pos:first-child{border-top:0}
+.pos .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos .s{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos .q{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.pos .q input{width:96px;border:1px solid var(--line);border-radius:9px;padding:6px 8px;background:var(--surface2);text-align:right;font-size:16px;outline:none}
+.pos .rm{color:var(--bad);font-size:20px;line-height:1;padding:4px}
+.pos .pv{grid-column:2;text-align:right;font-size:13px;color:var(--text2)}
+.search{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+.search input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--surface2);outline:none;font-size:16px}
+.btn{background:var(--accent);color:#fff;border-radius:12px;padding:10px 14px;font-weight:650}
+.btn.ghost{background:var(--surface2);color:var(--text)}
+.btn.wide{display:block;width:100%;padding:14px;text-align:center;margin-top:10px}
+.btn.danger{background:none;color:var(--bad);border:1px solid var(--line);background:var(--surface)}
+.btn:disabled{opacity:.5}
+.results button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:10px 14px;border-top:1px solid var(--line)}
+.results .t{font-weight:600}
+.results .s{color:var(--muted);font-size:12.5px}
+.link-btn{color:var(--accent);font-weight:600;padding:12px 14px;display:block;width:100%;text-align:left;border-top:1px solid var(--line)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.switch{position:relative;width:51px;height:31px;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch span{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:.2s}
+.switch span:before{content:"";position:absolute;width:27px;height:27px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.switch input:checked+span{background:#34c759}
+.switch input:checked+span:before{transform:translateX(20px)}
+
+/* lock */
+.lock{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
+.lock .big-logo{width:84px;height:84px;border-radius:22px;background:linear-gradient(150deg,#256abf,#0d2a55);color:#fff;font-weight:800;font-size:34px;display:grid;place-items:center;letter-spacing:-1px;box-shadow:0 10px 30px rgba(20,60,120,.35)}
+.lock h1{font-size:22px;margin:6px 0 0}
+.lock p{color:var(--text2);margin:0}
+.lock .pin{width:200px;text-align:center;font-size:24px;letter-spacing:10px;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface);outline:none}
+.shake{animation:shake .35s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--surface);padding:10px 16px;border-radius:12px;font-size:14px;z-index:60;max-width:90vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:fade .2s}
+</style>
+</head>
+<body>
+
+<div id="lock" class="lock" hidden>
+  <div class="big-logo">MP</div>
+  <h1>Mon Patrimoine</h1>
+  <p id="lockMsg">Application verrouillée</p>
+  <button id="unlockFace" class="btn" style="padding:13px 22px">Déverrouiller avec Face ID</button>
+  <button id="usePin" class="link-btn" style="width:auto;border:0;text-align:center">Utiliser le code</button>
+  <input id="pinInput" class="pin num" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" hidden aria-label="Code">
+</div>
+
+<main id="app">
+  <header class="top">
+    <div class="logo" aria-hidden="true">MP</div>
+    <div class="brand">Mon Patrimoine</div>
+    <button class="icon-btn" id="refreshBtn" aria-label="Actualiser les cours">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button class="icon-btn" id="settingsBtn" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <section class="hero">
+    <div class="label">Patrimoine total</div>
+    <div class="total num" id="total">0 €</div>
+    <div class="delta flat" id="delta"></div>
+    <div class="updated" id="updated"></div>
+  </section>
+
+  <div id="content"></div>
+</main>
+
+<button class="fab" id="fab"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>
+
+<div id="sheet" class="sheet-wrap" hidden><div class="sheet" role="dialog" aria-modal="true"><div id="sheetInner"></div></div></div>
+
+<script>
+'use strict';
+/* ---------- constantes ---------- */
+const CATS = [
+  {id:'banque',  name:'Banques', one:'Banque',  ph:'Ex : Boursorama, Livret A'},
+  {id:'bourse',  name:'Bourse',  one:'Bourse',  ph:'Ex : PEA Fortuneo, CTO'},
+  {id:'societe', name:'Société', one:'Société', ph:'Ex : Ma SASU (trésorerie)'},
+  {id:'crypto',  name:'Crypto',  one:'Crypto',  ph:'Ex : Ledger, Binance'}
+];
+const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+const KEY = 'mp.data.v1';
+const RANGES = [['1M',30],['3M',91],['1A',365],['Tout',0]];
+const DEFAULT = {v:1, accounts:[], history:[], prices:{}, fx:{}, meta:{cryptoAt:0, stockAt:0},
+  settings:{avKey:'', lock:false, credId:'', pinHash:'', pinSalt:'', pinLen:0}, ui:{range:'1A'}};
+
+/* ---------- utilitaires ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt0 = new Intl.NumberFormat('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0});
+const fmt2 = new Intl.NumberFormat('fr-FR', {style:'currency', currency:'EUR', minimumFractionDigits:2, maximumFractionDigits:2});
+const eur = (n, dec) => (dec ? fmt2 : fmt0).format(n || 0);
+const pct = n => (n * 100).toLocaleString('fr-FR', {maximumFractionDigits:1}) + ' %';
+const qtyFmt = n => (n || 0).toLocaleString('fr-FR', {maximumFractionDigits:8});
+function priceFmt(n){
+  if (n == null) return '—';
+  return n.toLocaleString('fr-FR', n < 1 ? {maximumSignificantDigits:4} : {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+}
+function compact(n){
+  const a = Math.abs(n);
+  if (a >= 1e6) return (n/1e6).toLocaleString('fr-FR', {maximumFractionDigits:2}) + ' M€';
+  if (a >= 1e4) return Math.round(n/1e3).toLocaleString('fr-FR') + ' k€';
+  if (a >= 1e3) return (n/1e3).toLocaleString('fr-FR', {maximumFractionDigits:1}) + ' k€';
+  return Math.round(n) + ' €';
+}
+function parseNum(s){
+  if (typeof s === 'number') return s;
+  const v = parseFloat(String(s || '').replace(/[\s  €]/g, '').replace(',', '.'));
+  return isFinite(v) ? v : 0;
+}
+const numIn = n => (n ? String(Math.round(n * 1e8) / 1e8).replace('.', ',') : '');
+function today(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+const dayMs = s => new Date(s + 'T12:00:00').getTime();
+const shortDate = s => new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short'});
+const longDate = s => new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'});
+function ago(t){
+  if (!t) return '';
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return 'il y a ' + m + ' min';
+  const h = Math.round(m / 60);
+  if (h < 24) return 'il y a ' + h + ' h';
+  return 'il y a ' + Math.round(h / 24) + ' j';
+}
+let toastTimer;
+function toast(msg, ms = 2600){
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), ms);
+}
+async function fetchJSON(url, ms = 12000){
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, {signal:ctl.signal, cache:'no-store'}); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(tm); }
+}
+
+/* ---------- données ---------- */
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const d = JSON.parse(raw), o = clone(DEFAULT);
+      Object.assign(o, d);
+      o.settings = Object.assign({}, DEFAULT.settings, d.settings || {});
+      o.meta = Object.assign({}, DEFAULT.meta, d.meta || {});
+      o.ui = Object.assign({}, DEFAULT.ui, d.ui || {});
+      for (const k of ['accounts','history']) if (!Array.isArray(o[k])) o[k] = [];
+      o.prices = o.prices || {}; o.fx = o.fx || {};
+      return o;
+    }
+  } catch (e) {}
+  return clone(DEFAULT);
+}
+let S = load();
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Impossible d'enregistrer sur cet appareil"); } }
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ---------- valorisation ---------- */
+const normCur = c => (c || 'EUR').toUpperCase();
+function posPrice(p){
+  const pr = S.prices[p.src + ':' + p.id];
+  if (!pr || typeof pr.p !== 'number') return null;
+  if (p.src === 'cg') return pr.p;
+  let price = pr.p, cur = normCur(p.cur);
+  if (cur === 'GBX') { price /= 100; cur = 'GBP'; }
+  if (cur === 'EUR') return price;
+  const rate = S.fx.rates && S.fx.rates[cur];
+  return rate ? price / rate : null;
+}
+function accValue(a){
+  let v = a.cash || 0, missing = 0;
+  for (const p of a.positions || []) {
+    const pr = posPrice(p);
+    if (pr == null) { if (p.qty) missing++; } else v += (p.qty || 0) * pr;
+  }
+  return {v, missing};
+}
+function totals(){
+  const byCat = {banque:0, bourse:0, societe:0, crypto:0}; let total = 0;
+  for (const a of S.accounts) { const {v} = accValue(a); byCat[a.cat] = (byCat[a.cat] || 0) + v; total += v; }
+  for (const k in byCat) byCat[k] = Math.round(byCat[k] * 100) / 100;
+  return {total: Math.round(total * 100) / 100, byCat};
+}
+function snapshot(){
+  if (!S.accounts.length) return;
+  const t = totals(), d = today(), e = {d, t: t.total, c: t.byCat}, h = S.history;
+  if (h.length && h[h.length - 1].d === d) h[h.length - 1] = e; else h.push(e);
+  h.sort((a, b) => a.d < b.d ? -1 : 1);
+  save();
+}
+const allPositions = src => S.accounts.flatMap(a => (a.positions || []).filter(p => p.src === src));
+
+/* ---------- cours ---------- */
+let refreshing = false;
+class RateLimit extends Error {}
+async function refreshFx(){
+  let r;
+  try { r = await fetchJSON('https://api.frankfurter.dev/v1/latest'); }
+  catch (e) { r = await fetchJSON('https://api.frankfurter.app/latest'); }
+  if (!r || !r.rates) throw new Error('fx');
+  S.fx = {rates: r.rates, t: Date.now()};
+}
+async function cgPrices(ids){
+  const r = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?vs_currencies=eur&ids=' + encodeURIComponent(ids.join(',')));
+  const now = Date.now();
+  for (const id of ids) if (r[id] && typeof r[id].eur === 'number') S.prices['cg:' + id] = {p: r[id].eur, t: now};
+}
+async function avQuote(sym){
+  if (!S.settings.avKey) throw new Error('nokey');
+  const r = await fetchJSON('https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(sym) + '&apikey=' + encodeURIComponent(S.settings.avKey));
+  if (r.Note || r.Information) throw new RateLimit(r.Note || r.Information);
+  const q = r['Global Quote'], p = q && parseFloat(q['05. price']);
+  if (!p) throw new Error('vide');
+  S.prices['av:' + sym] = {p, t: Date.now(), day: q['07. latest trading day'] || ''};
+}
+function setSpinning(on){ $('#refreshBtn').classList.toggle('spin', on); }
+async function refreshPrices(force = false){
+  if (refreshing) return; refreshing = true; setSpinning(true);
+  const errs = []; const now = Date.now();
+  try {
+    const cg = [...new Set(allPositions('cg').map(p => p.id))];
+    if (cg.length && (force || now - (S.meta.cryptoAt || 0) > 5 * 60e3)) {
+      try { await cgPrices(cg); S.meta.cryptoAt = Date.now(); } catch (e) { errs.push('crypto'); }
+    }
+    const av = allPositions('av');
+    if (av.length) {
+      const needFx = av.some(p => !['EUR'].includes(normCur(p.cur)));
+      if (needFx && (force || now - (S.fx.t || 0) > 12 * 3600e3)) { try { await refreshFx(); } catch (e) { errs.push('devises'); } }
+      if (S.settings.avKey) {
+        const minAge = force ? 15 * 60e3 : 6 * 3600e3;   // la clé gratuite = 25 requêtes / jour
+        const syms = [...new Set(av.map(p => p.id))].filter(s => { const pr = S.prices['av:' + s]; return !pr || now - pr.t > minAge; });
+        for (let i = 0; i < syms.length; i++) {
+          try { await avQuote(syms[i]); }
+          catch (e) { if (e instanceof RateLimit) { errs.push('limite'); break; } errs.push('bourse'); }
+          if (i < syms.length - 1) await sleep(1300);
+        }
+        S.meta.stockAt = Date.now();
+      } else if (force) errs.push('cle');
+    }
+  } finally {
+    save(); snapshot(); render();
+    refreshing = false; setSpinning(false);
+  }
+  if (errs.includes('limite')) toast('Limite Alpha Vantage atteinte (25 mises à jour/jour). Réessaie demain.', 4000);
+  else if (errs.includes('cle')) toast('Ajoute ta clé Alpha Vantage dans Réglages pour les cours de bourse.', 3600);
+  else if (errs.length) toast('Certains cours n’ont pas pu être mis à jour (' + [...new Set(errs)].join(', ') + ')', 3600);
+  else if (force) toast('Cours à jour');
+}
+
+/* ---------- rendu ---------- */
+let selCat = null;
+function render(){
+  const t = totals();
+  $('#total').textContent = eur(t.total);
+  renderDelta(t.total);
+  const last = Math.max(S.meta.cryptoAt || 0, S.meta.stockAt || 0);
+  const hasAuto = allPositions('cg').length + allPositions('av').length > 0;
+  $('#updated').textContent = hasAuto && last ? 'Cours mis à jour ' + ago(last) : '';
+  const c = $('#content');
+  if (!S.accounts.length) {
+    c.innerHTML = `<div class="card welcome">
+      <h2 style="font-size:18px">Bienvenue 👋</h2>
+      <p>Ajoute tes comptes pour voir tout ton argent au même endroit.</p>
+      <div class="cats-pick" style="grid-template-columns:1fr 1fr">${CATS.map(k => `<button class="on" data-add="${k.id}"><span class="dot" style="display:inline-block;margin-right:6px;background:var(--c-${k.id})"></span>${k.name}</button>`).join('')}</div>
+    </div>`;
+    return;
+  }
+  c.innerHTML = `
+    <section class="card">
+      <div class="card-head"><h2>Évolution</h2>
+        <div class="seg" id="range">${RANGES.map(([k]) => `<button data-r="${k}" class="${S.ui.range === k ? 'on' : ''}">${k}</button>`).join('')}</div>
+      </div>
+      <div class="chart" id="lineChart"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Répartition</h2></div>
+      <div class="donut-row"><div class="donut" id="donut"></div><div class="legend" id="legend"></div></div>
+    </section>
+    ${CATS.map(k => catBlock(k, t)).join('')}`;
+  drawLine();
+  drawDonut(t);
+}
+function rangePoints(){
+  const days = (RANGES.find(r => r[0] === S.ui.range) || RANGES[3])[1];
+  const h = S.history;
+  if (!days) return h.slice();
+  const from = Date.now() - days * 864e5;
+  return h.filter(p => dayMs(p.d) >= from);
+}
+function renderDelta(total){
+  const el = $('#delta'); const pts = rangePoints();
+  if (pts.length < 2 || !S.accounts.length) { el.className = 'delta flat'; el.innerHTML = S.accounts.length ? '<span class="since">Le suivi commence aujourd’hui</span>' : ''; return; }
+  const first = pts[0].t, diff = total - first, rel = first ? diff / Math.abs(first) : 0;
+  const cls = Math.abs(diff) < 0.5 ? 'flat' : diff > 0 ? 'up' : 'down';
+  const icon = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '■';
+  el.className = 'delta ' + cls;
+  el.innerHTML = `<span>${icon} ${diff >= 0 ? '+' : '−'}${eur(Math.abs(diff))} (${diff >= 0 ? '+' : '−'}${pct(Math.abs(rel))})</span><span class="since">depuis le ${longDate(pts[0].d)}</span>`;
+}
+function catBlock(k, t){
+  const accs = S.accounts.filter(a => a.cat === k.id);
+  const share = t.total > 0 ? Math.max(0, t.byCat[k.id]) / posSum(t) : 0;
+  return `<section class="cat">
+    <div class="cat-head"><span class="dot" style="background:var(--c-${k.id})"></span><h3>${k.name}</h3>
+      <span class="sum num">${eur(t.byCat[k.id])}<span class="pct">${accs.length ? pct(share) : ''}</span></span></div>
+    ${accs.map(a => accRow(a)).join('')}
+    <button class="add-line" data-add="${k.id}">＋ Ajouter ${k.id === 'banque' ? 'un compte' : k.id === 'societe' ? 'une société' : k.id === 'crypto' ? 'un portefeuille' : 'un compte titres'}</button>
+  </section>`;
+}
+function accRow(a){
+  const {v, missing} = accValue(a);
+  let sub = '';
+  const ps = a.positions || [];
+  if (ps.length) sub = ps.length + (a.cat === 'crypto' ? ' crypto' + (ps.length > 1 ? 's' : '') : ' titre' + (ps.length > 1 ? 's' : '')) + ' · ' + ps.slice(0, 3).map(p => esc(p.sym)).join(', ') + (ps.length > 3 ? '…' : '');
+  else if (a.note) sub = esc(a.note);
+  if (missing) sub = '⚠︎ cours manquant · ' + sub;
+  return `<button class="acc" data-edit="${a.id}"><div class="main"><div class="name">${esc(a.name)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="val num">${eur(v)}</div></button>`;
+}
+const posSum = t => Object.values(t.byCat).reduce((s, v) => s + Math.max(0, v), 0) || 1;
+
+/* courbe d'évolution */
+function niceStep(span, n){ const raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag; }
+function drawLine(){
+  const el = $('#lineChart'); if (!el) return;
+  const pts = rangePoints();
+  if (pts.length < 2) {
+    el.innerHTML = `<div class="empty-chart">La courbe se remplit toute seule : un point est enregistré chaque jour où tu ouvres l'app.<br><br>Reviens demain pour voir le 2ᵉ point 📈</div>`;
+    return;
+  }
+  const W = Math.max(260, el.clientWidth || 320), H = 190, pl = 4, pr = 10, pt = 14, pb = 24;
+  const xs = pts.map(p => dayMs(p.d)), ys = pts.map(p => p.t);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (hi - lo < 1) { lo -= Math.max(1, Math.abs(lo) * 0.02); hi += Math.max(1, Math.abs(hi) * 0.02); }
+  const step = niceStep(hi - lo, 3); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const x0 = xs[0], x1 = xs[xs.length - 1];
+  const X = t => pl + (t - x0) / (x1 - x0) * (W - pl - pr);
+  const Y = v => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
+  let grid = '';
+  for (let v = lo; v <= hi + step / 2; v += step) {
+    const y = Y(v).toFixed(1);
+    grid += `<line class="grid" x1="0" x2="${W}" y1="${y}" y2="${y}"/><text class="axis num" x="0" y="${(Y(v) - 4).toFixed(1)}">${compact(v)}</text>`;
+  }
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(xs[i]).toFixed(1) + ' ' + Y(p.t).toFixed(1)).join(' ');
+  const area = d + ` L${X(x1).toFixed(1)} ${H - pb} L${X(x0).toFixed(1)} ${H - pb} Z`;
+  const lx = X(x1), ly = Y(ys[ys.length - 1]);
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Évolution du patrimoine total">
+    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".18"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#ag)"/>
+    <path d="${d}" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${lx}" cy="${ly}" r="5" style="fill:var(--accent);stroke:var(--surface)" stroke-width="2"/>
+    <text class="axis" x="${pl}" y="${H - 6}">${shortDate(pts[0].d)}</text>
+    <text class="axis" x="${W - pr}" y="${H - 6}" text-anchor="end">${shortDate(pts[pts.length - 1].d)}</text>
+    <g id="hover" style="display:none"><line id="hl" y1="${pt}" y2="${H - pb}" style="stroke:var(--muted)" stroke-width="1" stroke-dasharray="3 3"/><circle id="hc" r="5" style="fill:var(--accent);stroke:var(--surface)" stroke-width="2"/></g>
+    <rect x="0" y="0" width="${W}" height="${H}" fill="transparent" id="hit"/>
+  </svg><div class="tip" id="tip" hidden></div>`;
+  const svg = el.querySelector('svg'), tip = $('#tip'), g = $('#hover');
+  const move = ev => {
+    const r = svg.getBoundingClientRect(); const cx = (ev.clientX - r.left) * (W / r.width);
+    let best = 0, bd = Infinity; xs.forEach((x, i) => { const dd = Math.abs(X(x) - cx); if (dd < bd) { bd = dd; best = i; } });
+    const px = X(xs[best]), py = Y(ys[best]);
+    g.style.display = ''; $('#hl').setAttribute('x1', px); $('#hl').setAttribute('x2', px); $('#hc').setAttribute('cx', px); $('#hc').setAttribute('cy', py);
+    tip.hidden = false; tip.innerHTML = `${longDate(pts[best].d)}<br><b class="num">${eur(ys[best])}</b>`;
+    const left = px * (r.width / W); const half = tip.offsetWidth / 2;
+    tip.style.left = Math.min(Math.max(left, half), r.width - half) + 'px';
+    tip.style.top = Math.max(0, py * (r.height / H) - tip.offsetHeight - 12) + 'px';
+  };
+  const out = () => { g.style.display = 'none'; tip.hidden = true; };
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move);
+  svg.addEventListener('pointerleave', out); svg.addEventListener('pointercancel', out);
+}
+
+/* camembert */
+function drawDonut(t){
+  const el = $('#donut'), lg = $('#legend'); if (!el) return;
+  const sum = posSum(t), R = 60, SW = 22, C = 2 * Math.PI * R, GAP = 2;
+  const parts = CATS.map(k => ({k, v: Math.max(0, t.byCat[k.id])})).filter(p => p.v > 0);
+  let off = 0, segs = '';
+  for (const p of parts) {
+    const len = p.v / sum * C, on = selCat === p.k.id;
+    const dash = parts.length > 1 ? Math.max(0.5, len - GAP) : len;
+    segs += `<circle class="seg-c" data-cat="${p.k.id}" cx="75" cy="75" r="${R}" fill="none" style="stroke:var(--c-${p.k.id})" stroke-width="${on ? SW + 6 : SW}"
+      stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 75 75)" opacity="${selCat && !on ? .35 : 1}"/>`;
+    off += len;
+  }
+  if (!parts.length) segs = `<circle cx="75" cy="75" r="${R}" fill="none" style="stroke:var(--line)" stroke-width="${SW}"/>`;
+  const sel = selCat && parts.find(p => p.k.id === selCat);
+  const c1 = sel ? sel.k.name : 'Total', c2 = sel ? pct(sel.v / sum) : compact(t.total);
+  el.innerHTML = `<svg viewBox="0 0 150 150" role="img" aria-label="Répartition par catégorie">${segs}
+    <text x="75" y="70" text-anchor="middle" style="fill:var(--muted)" font-size="12">${esc(c1)}</text>
+    <text x="75" y="90" text-anchor="middle" style="fill:var(--text)" font-size="17" font-weight="700" class="num">${esc(c2)}</text></svg>`;
+  lg.innerHTML = CATS.map(k => {
+    const v = t.byCat[k.id];
+    return `<button class="leg ${selCat === k.id ? 'on' : ''}" data-cat="${k.id}"><span class="dot" style="background:var(--c-${k.id})"></span><span class="n">${k.name}</span><span class="v num">${compact(v)}<small>${pct(Math.max(0, v) / sum)}</small></span></button>`;
+  }).join('');
+}
+
+/* ---------- feuille (modale) ---------- */
+let sheetClose = null;
+function openSheet(html, onClose){
+  $('#sheetInner').innerHTML = html; $('#sheet').hidden = false; sheetClose = onClose || null;
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet(){ $('#sheet').hidden = true; $('#sheetInner').innerHTML = ''; document.body.style.overflow = ''; const f = sheetClose; sheetClose = null; f && f(); }
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+
+/* ---------- éditeur de compte ---------- */
+let draft = null, searchRes = [], searching = false;
+function openEditor(id, cat){
+  const a = id && S.accounts.find(x => x.id === id);
+  draft = a ? clone(a) : {id: uid(), cat: cat || 'banque', name: '', cash: 0, note: '', positions: [], _new: true};
+  searchRes = []; renderEditor(true);
+}
+function renderEditor(first){
+  const a = draft, k = CAT[a.cat], hasPos = a.cat === 'bourse' || a.cat === 'crypto';
+  const cashLabel = {banque:'Solde', societe:'Montant', bourse:'Liquidités', crypto:'Montant en €'}[a.cat];
+  const body = `
+  <div class="sheet-bar"><button id="edCancel">Annuler</button><h2>${a._new ? 'Nouveau' : 'Modifier'}</h2><button class="r" id="edSave">OK</button></div>
+  <div class="sheet-body">
+    <div class="cats-pick" id="edCat">${CATS.map(c => `<button data-c="${c.id}" class="${c.id === a.cat ? 'on' : ''}">${c.one}</button>`).join('')}</div>
+    <div class="group">
+      <div class="field"><label for="edName">Nom</label><input id="edName" class="left" placeholder="${esc(k.ph)}" value="${esc(a.name)}" autocomplete="off"></div>
+      <div class="field"><label for="edCash">${cashLabel}</label><input id="edCash" class="num" inputmode="decimal" placeholder="0" value="${numIn(a.cash)}" autocomplete="off"><span style="color:var(--muted)">€</span></div>
+      ${a.cat === 'societe' ? `<div class="field"><label for="edNote">Note</label><input id="edNote" class="left" placeholder="Ex : trésorerie, valeur des parts" value="${esc(a.note || '')}"></div>` : ''}
+    </div>
+    ${a.cat === 'bourse' ? `<p class="hint">Mets ici l'argent non investi. Pour un suivi simple, tu peux aussi juste y mettre la valeur totale du compte.</p>` : ''}
+    ${a.cat === 'crypto' ? `<p class="hint">Optionnel : euros ou stablecoins posés sur la plateforme. Ajoute tes cryptos ci-dessous pour le cours automatique.</p>` : ''}
+    ${hasPos ? posSection(a) : ''}
+    ${!a._new ? `<button class="btn wide danger" id="edDel">Supprimer ce compte</button>` : ''}
+  </div>`;
+  if (first) openSheet(body, () => { draft = null; }); else $('#sheetInner').innerHTML = body;
+  bindEditor();
+}
+function posSection(a){
+  const isC = a.cat === 'crypto';
+  const rows = (a.positions || []).map((p, i) => {
+    const pr = posPrice(p);
+    return `<div class="pos"><div style="min-width:0"><div class="t">${esc(p.sym)}</div><div class="s">${esc(p.name)}${p.region ? ' · ' + esc(p.region) : ''}</div></div>
+      <div class="q"><input data-q="${i}" inputmode="decimal" placeholder="Qté" value="${numIn(p.qty)}" aria-label="Quantité ${esc(p.sym)}"><button class="rm" data-rm="${i}" aria-label="Retirer">×</button></div>
+      <div class="s">${pr == null ? 'cours en attente' : 'cours ' + priceFmt(pr)}</div><div class="pv num" data-pv="${i}">${pr == null ? '—' : eur(pr * (p.qty || 0))}</div></div>`;
+  }).join('');
+  const noKey = !isC && !S.settings.avKey;
+  return `<div class="group-title">${isC ? 'Cryptos (cours automatique)' : 'Titres (cours automatique)'}</div>
+  <div class="group">
+    ${rows || `<div class="row" style="color:var(--muted);font-size:14px">${isC ? 'Aucune crypto ajoutée' : 'Aucun titre ajouté'}</div>`}
+    ${noKey ? `<div class="row" style="display:block;font-size:14px;color:var(--text2)">Pour chercher des titres et avoir leur cours, ajoute d'abord ta clé gratuite Alpha Vantage dans <b>Réglages</b>.</div>`
+    : `<div class="search"><input id="edQ" placeholder="${isC ? 'Ex : bitcoin, ETH, solana' : 'Ex : CW8, Air Liquide, Apple'}" autocomplete="off" enterkeyhint="search"><button class="btn" id="edSearch">${searching ? '…' : 'Chercher'}</button></div>
+       <div class="results">${searchRes.map((r, i) => `<button data-pick="${i}"><span style="min-width:0"><span class="t">${esc(r.sym)}</span> <span class="s">${esc(r.name)}</span></span><span class="s">${esc(r.region || '')}${r.cur ? ' · ' + esc(r.cur) : ''}</span></button>`).join('')}</div>`}
+  </div>
+  ${!isC ? `<p class="hint">Astuce : pour Paris, choisis le résultat « Paris » en EUR. Chaque recherche et chaque mise à jour utilise 1 des 25 requêtes gratuites du jour.</p>` : ''}`;
+}
+function bindEditor(){
+  const a = draft;
+  $('#edCancel').onclick = closeSheet;
+  $('#edSave').onclick = saveDraft;
+  $('#edName').oninput = e => a.name = e.target.value;
+  $('#edCash').oninput = e => a.cash = parseNum(e.target.value);
+  const note = $('#edNote'); if (note) note.oninput = e => a.note = e.target.value;
+  $('#edCat').onclick = e => { const b = e.target.closest('[data-c]'); if (!b || b.dataset.c === a.cat) return;
+    a.positions = [];
+    a.cat = b.dataset.c; searchRes = []; renderEditor(); };
+  document.querySelectorAll('[data-q]').forEach(inp => inp.oninput = e => {
+    const i = +e.target.dataset.q, p = a.positions[i]; p.qty = parseNum(e.target.value);
+    const pr = posPrice(p); const cell = document.querySelector(`[data-pv="${i}"]`); if (cell) cell.textContent = pr == null ? '—' : eur(pr * p.qty);
+  });
+  document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { a.positions.splice(+b.dataset.rm, 1); renderEditor(); });
+  const q = $('#edQ'), sb = $('#edSearch');
+  if (q) { q.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(q.value); } }; sb.onclick = () => doSearch(q.value); }
+  document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => pick(searchRes[+b.dataset.pick]));
+  const del = $('#edDel'); if (del) del.onclick = () => {
+    if (!confirm('Supprimer « ' + (a.name || CAT[a.cat].one) + ' » ?')) return;
+    S.accounts = S.accounts.filter(x => x.id !== a.id); save(); snapshot(); closeSheet(); render(); toast('Compte supprimé');
+  };
+}
+async function doSearch(qs){
+  qs = (qs || '').trim(); if (!qs || searching) return;
+  searching = true; renderEditor(); $('#edQ').value = qs;
+  try {
+    if (draft.cat === 'crypto') {
+      const r = await fetchJSON('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(qs));
+      searchRes = (r.coins || []).slice(0, 8).map(c => ({src:'cg', id:c.id, sym:(c.symbol || '').toUpperCase(), name:c.name}));
+    } else {
+      const r = await fetchJSON('https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=' + encodeURIComponent(qs) + '&apikey=' + encodeURIComponent(S.settings.avKey));
+      if (r.Note || r.Information) throw new RateLimit(r.Note || r.Information);
+      searchRes = (r.bestMatches || []).slice(0, 8).map(m => ({src:'av', id:m['1. symbol'], sym:m['1. symbol'], name:m['2. name'], region:m['4. region'], cur:m['8. currency']}));
+    }
+    if (!searchRes.length) toast('Aucun résultat');
+  } catch (e) {
+    toast(e instanceof RateLimit ? 'Limite Alpha Vantage atteinte ou clé invalide.' : 'Recherche impossible (connexion ?)');
+  }
+  searching = false;
+  if (draft) { renderEditor(); const q = $('#edQ'); if (q) q.value = qs; }
+}
+async function pick(r){
+  if (!r || !draft) return;
+  draft.positions = draft.positions || [];
+  if (!draft.positions.some(p => p.src === r.src && p.id === r.id)) draft.positions.push({src:r.src, id:r.id, sym:r.sym, name:r.name, cur:r.cur || '', region:r.region || '', qty:0});
+  searchRes = []; renderEditor();
+  const inputs = document.querySelectorAll('[data-q]'); const last = inputs[inputs.length - 1]; if (last) last.focus();
+  try {
+    if (r.src === 'cg') await cgPrices([r.id]);
+    else { if (normCur(r.cur) !== 'EUR' && !(S.fx.rates && S.fx.rates[normCur(r.cur) === 'GBX' ? 'GBP' : normCur(r.cur)])) await refreshFx(); await avQuote(r.id); }
+    save();
+    if (draft) { const keep = [...document.querySelectorAll('[data-q]')].map(i => i.value); renderEditor(); document.querySelectorAll('[data-q]').forEach((i, n) => { if (keep[n] != null) i.value = keep[n]; }); }
+  } catch (e) { toast(e instanceof RateLimit ? 'Limite Alpha Vantage atteinte : le cours viendra plus tard.' : 'Cours indisponible pour le moment'); }
+}
+function saveDraft(){
+  const a = draft; if (!a) return;
+  a.name = (a.name || '').trim() || CAT[a.cat].one;
+  a.positions = a.positions || [];
+  const isNew = a._new; delete a._new;
+  if (isNew) S.accounts.push(a); else S.accounts = S.accounts.map(x => x.id === a.id ? a : x);
+  save(); snapshot(); closeSheet(); render();
+  toast(isNew ? 'Compte ajouté' : 'Enregistré');
+}
+
+/* ---------- réglages ---------- */
+function openSettings(){
+  const s = S.settings;
+  openSheet(`
+  <div class="sheet-bar"><span style="min-width:64px"></span><h2>Réglages</h2><button class="r" id="stDone">OK</button></div>
+  <div class="sheet-body">
+    <div class="group-title">Sécurité</div>
+    <div class="group">
+      <div class="row"><span>Verrouillage Face ID</span><label class="switch"><input type="checkbox" id="stLock" ${s.lock ? 'checked' : ''}><span></span></label></div>
+      <div id="lockSetup" hidden>
+        <div class="field"><label for="pin1">Code de secours</label><input id="pin1" class="num" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="4 à 6 chiffres" autocomplete="off"></div>
+        <div class="field"><label for="pin2">Confirmer</label><input id="pin2" class="num" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Retape-le" autocomplete="off"></div>
+        <div style="padding:0 14px 14px"><button class="btn wide" id="lockGo">Activer Face ID</button></div>
+      </div>
+    </div>
+    <p class="hint">${s.lock ? (s.credId ? 'Face ID actif. Le code sert si Face ID échoue.' : 'Verrouillage par code actif (Face ID indisponible sur cet appareil).') : "L'app demandera Face ID à chaque ouverture. Le code de secours sert si Face ID échoue."}</p>
+
+    <div class="group-title">Bourse — cours automatiques</div>
+    <div class="group">
+      <div class="field"><label for="avKey">Clé API</label><input id="avKey" class="left" placeholder="Colle ta clé Alpha Vantage" value="${esc(s.avKey)}" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+    </div>
+    <p class="hint">Clé gratuite en 1 minute sur <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener">alphavantage.co</a> (25 mises à jour par jour, largement assez : l'app ne rafraîchit la bourse que toutes les 6 h). La crypto, elle, marche sans clé.</p>
+
+    <div class="group-title">Sauvegarde</div>
+    <div class="group">
+      <button class="link-btn" style="border-top:0" id="stExport">Exporter une sauvegarde</button>
+      <button class="link-btn" id="stImport">Importer une sauvegarde</button>
+      <input type="file" id="stFile" accept="application/json,.json" hidden>
+    </div>
+    <p class="hint">Tes données restent uniquement sur ce téléphone (rien n'est envoyé sur internet, sauf les noms de cryptos/titres pour obtenir leur cours). Exporte une sauvegarde de temps en temps, par exemple dans Fichiers ou iCloud Drive.</p>
+
+    <div class="group-title">Données</div>
+    <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.0</p>
+  </div>`);
+  $('#stDone').onclick = () => { const k = $('#avKey').value.trim(); if (k !== S.settings.avKey) { S.settings.avKey = k; save(); if (k) refreshPrices(false); } closeSheet(); render(); };
+  $('#stLock').onchange = e => {
+    if (e.target.checked) { $('#lockSetup').hidden = false; $('#pin1').focus(); }
+    else { $('#lockSetup').hidden = true; if (S.settings.lock) { Object.assign(S.settings, {lock:false, credId:'', pinHash:'', pinSalt:'', pinLen:0}); save(); toast('Verrouillage désactivé'); } }
+  };
+  $('#lockGo').onclick = enableLock;
+  $('#stExport').onclick = exportData;
+  $('#stImport').onclick = () => $('#stFile').click();
+  $('#stFile').onchange = importData;
+  $('#stWipe').onclick = () => {
+    if (!confirm('Effacer tous tes comptes et ton historique ? (Pense à exporter une sauvegarde avant.)')) return;
+    if (!confirm('Vraiment tout effacer ? Ce n’est pas réversible.')) return;
+    S = clone(DEFAULT); save(); closeSheet(); render(); toast('Données effacées');
+  };
+}
+
+/* ---------- verrouillage (Face ID via WebAuthn + code) ---------- */
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+async function hashPin(pin, salt){ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)); return b64u(d); }
+async function faceAvailable(){ try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (e) { return false; } }
+async function enableLock(){
+  const p1 = $('#pin1').value, p2 = $('#pin2').value;
+  if (!/^\d{4,6}$/.test(p1)) { toast('Le code doit faire 4 à 6 chiffres'); return; }
+  if (p1 !== p2) { toast('Les deux codes ne correspondent pas'); return; }
+  const salt = b64u(rnd(16)); const hash = await hashPin(p1, salt);
+  let credId = '';
+  if (await faceAvailable()) {
+    try {
+      const cred = await navigator.credentials.create({publicKey: {
+        challenge: rnd(32), rp: {name: 'Mon Patrimoine', id: location.hostname},
+        user: {id: rnd(16), name: 'mon-patrimoine', displayName: 'Mon Patrimoine'},
+        pubKeyCredParams: [{type:'public-key', alg:-7}, {type:'public-key', alg:-257}],
+        authenticatorSelection: {authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'},
+        timeout: 60000, attestation: 'none'}});
+      credId = b64u(cred.rawId);
+    } catch (e) { toast('Face ID non activé (' + (e.name || 'erreur') + '). Verrouillage par code seulement.', 4000); }
+  } else toast('Face ID indisponible ici : verrouillage par code.', 3500);
+  Object.assign(S.settings, {lock:true, credId, pinHash:hash, pinSalt:salt, pinLen:p1.length}); save();
+  if (credId) toast('Face ID activé ✅');
+  closeSheet(); openSettings();
+}
+let locked = false, hiddenAt = 0;
+function lockNow(){
+  locked = true; $('#lock').hidden = false; $('#app').hidden = true; $('#fab').hidden = true;
+  if ($('#sheet') && !$('#sheet').hidden) closeSheet();
+  $('#unlockFace').hidden = !S.settings.credId; $('#pinInput').hidden = !!S.settings.credId; $('#usePin').hidden = !S.settings.credId;
+  $('#pinInput').value = ''; $('#lockMsg').textContent = 'Application verrouillée';
+  if (!S.settings.credId) setTimeout(() => $('#pinInput').focus(), 200);
+}
+function unlock(){
+  locked = false; $('#lock').hidden = true; $('#app').hidden = false; $('#fab').hidden = false;
+  render(); refreshPrices(false);
+}
+async function tryFace(auto){
+  if (!S.settings.credId) return;
+  try {
+    await navigator.credentials.get({publicKey: {challenge: rnd(32), rpId: location.hostname, userVerification: 'required', timeout: 60000,
+      allowCredentials: [{type:'public-key', id: unb64u(S.settings.credId), transports:['internal','hybrid']}]}});
+    unlock();
+  } catch (e) { if (!auto) $('#lockMsg').textContent = 'Face ID annulé — réessaie ou utilise le code'; }
+}
+$('#unlockFace').onclick = () => tryFace(false);
+$('#usePin').onclick = () => { $('#pinInput').hidden = false; $('#pinInput').focus(); };
+$('#pinInput').oninput = async e => {
+  const v = e.target.value.replace(/\D/g, ''); e.target.value = v;
+  if (v.length < (S.settings.pinLen || 4)) return;
+  if (await hashPin(v, S.settings.pinSalt) === S.settings.pinHash) unlock();
+  else { e.target.value = ''; e.target.classList.remove('shake'); void e.target.offsetWidth; e.target.classList.add('shake'); $('#lockMsg').textContent = 'Code incorrect'; }
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); document.body.classList.add('veil'); }
+  else {
+    document.body.classList.remove('veil');
+    if (S.settings.lock && !locked && Date.now() - hiddenAt > 30e3) { lockNow(); tryFace(true); }
+    else if (!locked) { snapshot(); refreshPrices(false); }
+  }
+});
+
+/* ---------- sauvegarde ---------- */
+async function exportData(){
+  const data = clone(S); data.settings = Object.assign({}, data.settings, {lock:false, credId:'', pinHash:'', pinSalt:'', pinLen:0});
+  const name = 'mon-patrimoine-' + today() + '.json';
+  const file = new File([JSON.stringify(data, null, 1)], name, {type:'application/json'});
+  try {
+    if (navigator.canShare && navigator.canShare({files:[file]})) { await navigator.share({files:[file], title:'Sauvegarde Mon Patrimoine'}); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+async function importData(e){
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || !Array.isArray(d.accounts) || !Array.isArray(d.history)) throw new Error('format');
+    if (!confirm('Remplacer tes données actuelles par cette sauvegarde (' + d.accounts.length + ' comptes) ?')) return;
+    const keep = {lock:S.settings.lock, credId:S.settings.credId, pinHash:S.settings.pinHash, pinSalt:S.settings.pinSalt, pinLen:S.settings.pinLen};
+    localStorage.setItem(KEY, JSON.stringify(d)); S = load(); Object.assign(S.settings, keep); save();
+    closeSheet(); render(); refreshPrices(true); toast('Sauvegarde importée');
+  } catch (err) { toast('Fichier de sauvegarde invalide'); }
+}
+
+/* ---------- événements ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-add],[data-edit],[data-r],[data-cat]'); if (!t) return;
+  if (t.dataset.add) openEditor(null, t.dataset.add);
+  else if (t.dataset.edit) openEditor(t.dataset.edit);
+  else if (t.dataset.r) { S.ui.range = t.dataset.r; save(); render(); }
+  else if (t.dataset.cat && t.closest('#donut,#legend')) { selCat = selCat === t.dataset.cat ? null : t.dataset.cat; drawDonut(totals()); }
+});
+$('#fab').onclick = () => openEditor(null, 'banque');
+$('#settingsBtn').onclick = openSettings;
+$('#refreshBtn').onclick = () => refreshPrices(true);
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (!locked) drawLine(); }, 150); });
+
+/* ---------- démarrage ---------- */
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if (S.settings.lock && S.settings.pinHash) { lockNow(); tryFace(true); }
+else { render(); snapshot(); refreshPrices(false); }
+</script>
+</body>
+</html>
