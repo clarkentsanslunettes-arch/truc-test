@@ -141,7 +141,7 @@ body.veil main,body.veil .sheet-wrap,body.veil .tabbar{filter:blur(24px)}
 .field input.left{text-align:left}
 .hint{color:var(--muted);font-size:13px;margin:8px 6px 0;line-height:1.45}
 .hint a{color:var(--accent)}
-.cats-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--card);padding:4px;border-radius:999px}
+.cats-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--card);padding:4px;border-radius:999px}
 .cats-pick button{padding:9px 2px;border-radius:999px;font-size:13px;font-weight:600;color:var(--text2)}
 .cats-pick button.on{background:#fff;color:#000}
 .pos{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 16px;border-top:1px solid var(--line);align-items:center}
@@ -234,7 +234,6 @@ body.veil main,body.veil .sheet-wrap,body.veil .tabbar{filter:blur(24px)}
 const CATS = [
   {id:'banque',  name:'Banques', one:'Banque',  ph:'Ex : Boursorama, Livret A'},
   {id:'bourse',  name:'Bourse',  one:'Bourse',  ph:'Ex : PEA Fortuneo, CTO'},
-  {id:'societe', name:'Société', one:'Société', ph:'Ex : Ma SASU (trésorerie)'},
   {id:'crypto',  name:'Crypto',  one:'Crypto',  ph:'Ex : Ledger, Binance'}
 ];
 const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
@@ -338,8 +337,8 @@ function accValue(a){
   return {v, missing};
 }
 function totals(){
-  const byCat = {banque:0, bourse:0, societe:0, crypto:0}; let total = 0;
-  for (const a of S.accounts) { const {v} = accValue(a); byCat[a.cat] = (byCat[a.cat] || 0) + v; total += v; }
+  const byCat = {banque:0, bourse:0, crypto:0}; let total = 0;
+  for (const a of S.accounts) { if (!CAT[a.cat]) continue; const {v} = accValue(a); byCat[a.cat] = (byCat[a.cat] || 0) + v; total += v; }
   for (const k in byCat) byCat[k] = Math.round(byCat[k] * 100) / 100;
   return {total: Math.round(total * 100) / 100, byCat};
 }
@@ -375,6 +374,19 @@ function perfSince(p, value, cat){
   const f0 = cat ? p.fc && p.fc[cat] : p.f, v0 = cat ? p.c && p.c[cat] : p.t;
   if (typeof f0 !== 'number' || typeof v0 !== 'number') return null;
   return (value - v0) - ((cat ? S.flows.byCat[cat] || 0 : S.flows.total) - f0);
+}
+// La catégorie « Société » a été retirée (patrimoine perso uniquement) : on efface ses comptes et
+// on la retire aussi de l'historique, sans que ça compte comme une perte.
+function dropSociete(){
+  if (S.meta.noSociete) return;
+  S.accounts = S.accounts.filter(a => a.cat !== 'societe');
+  for (const p of S.history) {
+    const v = (p.c && p.c.societe) || 0, fv = (p.fc && p.fc.societe) || 0;
+    p.t = r2(p.t - v); if (typeof p.f === 'number') p.f = r2(p.f - fv);
+    if (p.c) delete p.c.societe; if (p.fc) delete p.fc.societe;
+  }
+  if (S.flows && typeof S.flows.total === 'number') { S.flows.total = r2(S.flows.total - (S.flows.byCat.societe || 0)); delete S.flows.byCat.societe; }
+  S.meta.noSociete = true; save();
 }
 const allPositions = src => S.accounts.flatMap(a => (a.positions || []).filter(p => p.src === src));
 
@@ -770,7 +782,7 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.2</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.3</p>
   </div>`);
   $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
@@ -869,7 +881,7 @@ async function importData(e){
     if (!d || !Array.isArray(d.accounts) || !Array.isArray(d.history)) throw new Error('format');
     if (!await askConfirm('Remplacer tes données actuelles par cette sauvegarde (' + d.accounts.length + ' comptes) ?', 'Remplacer', true)) return;
     const keep = {lock:S.settings.lock, credId:S.settings.credId, pinHash:S.settings.pinHash, pinSalt:S.settings.pinSalt, pinLen:S.settings.pinLen};
-    localStorage.setItem(KEY, JSON.stringify(d)); S = load(); migrateFlows(); Object.assign(S.settings, keep); save();
+    localStorage.setItem(KEY, JSON.stringify(d)); S = load(); dropSociete(); migrateFlows(); Object.assign(S.settings, keep); save();
     closeSheet(); render(); refreshPrices(true); toast('Sauvegarde importée');
   } catch (err) { toast('Fichier de sauvegarde invalide'); }
 }
@@ -889,6 +901,7 @@ let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() 
 
 /* ---------- démarrage ---------- */
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+dropSociete();
 if (S.settings.lock && S.settings.pinHash) { lockNow(); tryFace(true); }
 else { render(); snapshot(); refreshPrices(false); }
 </script>
