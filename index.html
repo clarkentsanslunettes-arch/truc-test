@@ -301,7 +301,7 @@ function posPrice(p){
   const pr = S.prices[p.src + ':' + p.id];
   if (!pr || typeof pr.p !== 'number') return null;
   if (p.src === 'cg') return pr.p;
-  let price = pr.p, cur = normCur(p.cur);
+  let price = pr.p, cur = normCur(pr.cur || p.cur);
   if (cur === 'GBX') { price /= 100; cur = 'GBP'; }
   if (cur === 'EUR') return price;
   const rate = S.fx.rates && S.fx.rates[cur];
@@ -345,13 +345,15 @@ async function cgPrices(ids){
   const now = Date.now();
   for (const id of ids) if (r[id] && typeof r[id].eur === 'number') S.prices['cg:' + id] = {p: r[id].eur, t: now};
 }
-async function avQuote(sym){
-  if (!S.settings.avKey) throw new Error('nokey');
-  const r = await fetchJSON('https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(sym) + '&apikey=' + encodeURIComponent(S.settings.avKey));
-  if (r.Note || r.Information) throw new RateLimit(r.Note || r.Information);
-  const q = r['Global Quote'], p = q && parseFloat(q['05. price']);
-  if (!p) throw new Error('vide');
-  S.prices['av:' + sym] = {p, t: Date.now(), day: q['07. latest trading day'] || ''};
+const OV = 'https://api.onvista.de/api/v1/';
+async function ovQuote(p){
+  const j = await fetchJSON(OV + 'instruments/' + encodeURIComponent(p.type || 'FUND') + '/' + encodeURIComponent(p.id) + '/snapshot');
+  const list = ((j.quoteList && j.quoteList.list) || []).filter(q => q && typeof q.last === 'number');
+  const code = q => q.market && q.market.codeMarket;
+  const eurs = list.filter(q => q.isoCurrency === 'EUR').sort((a, b) => String(b.datetimeLast || '').localeCompare(String(a.datetimeLast || '')));
+  const best = eurs.find(q => code(q) === '_PAR') || eurs.find(q => code(q) === '_GER') || eurs[0] || j.quote;
+  if (!best || typeof best.last !== 'number') throw new Error('vide');
+  S.prices['ov:' + p.id] = {p: best.last, cur: best.isoCurrency || 'EUR', t: Date.now(), venue: (best.market && best.market.name) || ''};
 }
 function setSpinning(on){ $('#refreshBtn').classList.toggle('spin', on); }
 async function refreshPrices(force = false){
@@ -362,28 +364,19 @@ async function refreshPrices(force = false){
     if (cg.length && (force || now - (S.meta.cryptoAt || 0) > 5 * 60e3)) {
       try { await cgPrices(cg); S.meta.cryptoAt = Date.now(); } catch (e) { errs.push('crypto'); }
     }
-    const av = allPositions('av');
-    if (av.length) {
-      const needFx = av.some(p => !['EUR'].includes(normCur(p.cur)));
-      if (needFx && (force || now - (S.fx.t || 0) > 12 * 3600e3)) { try { await refreshFx(); } catch (e) { errs.push('devises'); } }
-      if (S.settings.avKey) {
-        const minAge = force ? 15 * 60e3 : 6 * 3600e3;   // la clé gratuite = 25 requêtes / jour
-        const syms = [...new Set(av.map(p => p.id))].filter(s => { const pr = S.prices['av:' + s]; return !pr || now - pr.t > minAge; });
-        for (let i = 0; i < syms.length; i++) {
-          try { await avQuote(syms[i]); }
-          catch (e) { if (e instanceof RateLimit) { errs.push('limite'); break; } errs.push('bourse'); }
-          if (i < syms.length - 1) await sleep(1300);
-        }
-        S.meta.stockAt = Date.now();
-      } else if (force) errs.push('cle');
+    const ov = [...new Map(allPositions('ov').map(p => [p.id, p])).values()];
+    const stale = ov.filter(p => { const pr = S.prices['ov:' + p.id]; return force || !pr || now - pr.t > 15 * 60e3; });
+    if (stale.length) {
+      const res = await Promise.allSettled(stale.map(p => ovQuote(p)));
+      if (res.some(r => r.status === 'rejected')) errs.push('bourse');
+      S.meta.stockAt = Date.now();
     }
+    if (ov.some(p => normCur((S.prices['ov:' + p.id] || {}).cur) !== 'EUR') && (force || now - (S.fx.t || 0) > 12 * 3600e3)) { try { await refreshFx(); } catch (e) { errs.push('devises'); } }
   } finally {
     save(); snapshot(); render();
     refreshing = false; setSpinning(false);
   }
-  if (errs.includes('limite')) toast('Limite Alpha Vantage atteinte (25 mises à jour/jour). Réessaie demain.', 4000);
-  else if (errs.includes('cle')) toast('Ajoute ta clé Alpha Vantage dans Réglages pour les cours de bourse.', 3600);
-  else if (errs.length) toast('Certains cours n’ont pas pu être mis à jour (' + [...new Set(errs)].join(', ') + ')', 3600);
+  if (errs.length) toast('Certains cours n’ont pas pu être mis à jour (' + [...new Set(errs)].join(', ') + ')', 3600);
   else if (force) toast('Cours à jour');
 }
 
@@ -394,7 +387,7 @@ function render(){
   $('#total').textContent = eur(t.total);
   renderDelta(t.total);
   const last = Math.max(S.meta.cryptoAt || 0, S.meta.stockAt || 0);
-  const hasAuto = allPositions('cg').length + allPositions('av').length > 0;
+  const hasAuto = allPositions('cg').length + allPositions('ov').length > 0;
   $('#updated').textContent = hasAuto && last ? 'Cours mis à jour ' + ago(last) : '';
   const c = $('#content');
   if (!S.accounts.length) {
@@ -578,15 +571,13 @@ function posSection(a){
       <div class="q"><input data-q="${i}" inputmode="decimal" placeholder="Qté" value="${numIn(p.qty)}" aria-label="Quantité ${esc(p.sym)}"><button class="rm" data-rm="${i}" aria-label="Retirer">×</button></div>
       <div class="s">${pr == null ? 'cours en attente' : 'cours ' + priceFmt(pr)}</div><div class="pv num" data-pv="${i}">${pr == null ? '—' : eur(pr * (p.qty || 0))}</div></div>`;
   }).join('');
-  const noKey = !isC && !S.settings.avKey;
   return `<div class="group-title">${isC ? 'Cryptos (cours automatique)' : 'Titres (cours automatique)'}</div>
   <div class="group">
     ${rows || `<div class="row" style="color:var(--muted);font-size:14px">${isC ? 'Aucune crypto ajoutée' : 'Aucun titre ajouté'}</div>`}
-    ${noKey ? `<div class="row" style="display:block;font-size:14px;color:var(--text2)">Pour chercher des titres et avoir leur cours, ajoute d'abord ta clé gratuite Alpha Vantage dans <b>Réglages</b>.</div>`
-    : `<div class="search"><input id="edQ" placeholder="${isC ? 'Ex : bitcoin, ETH, solana' : 'Ex : CW8, Air Liquide, Apple'}" autocomplete="off" enterkeyhint="search"><button class="btn" id="edSearch">${searching ? '…' : 'Chercher'}</button></div>
-       <div class="results">${searchRes.map((r, i) => `<button data-pick="${i}"><span style="min-width:0"><span class="t">${esc(r.sym)}</span> <span class="s">${esc(r.name)}</span></span><span class="s">${esc(r.region || '')}${r.cur ? ' · ' + esc(r.cur) : ''}</span></button>`).join('')}</div>`}
+    <div class="search"><input id="edQ" placeholder="${isC ? 'Ex : bitcoin, ETH, solana' : 'Nom ou ISIN, ex : Amundi MSCI World'}" autocomplete="off" enterkeyhint="search"><button class="btn" id="edSearch">${searching ? '…' : 'Chercher'}</button></div>
+    <div class="results">${searchRes.map((r, i) => `<button data-pick="${i}"><span style="min-width:0;display:block"><span class="t" style="display:block">${esc(r.sym)}</span><span class="s">${esc(r.name)}</span></span></button>`).join('')}</div>
   </div>
-  ${!isC ? `<p class="hint">Astuce : pour Paris, choisis le résultat « Paris » en EUR. Chaque recherche et chaque mise à jour utilise 1 des 25 requêtes gratuites du jour.</p>` : ''}`;
+  ${!isC ? `<p class="hint">Cherche par nom ou, plus sûr, par code ISIN (12 caractères, ex : LU1681043599) : il est affiché dans l'appli de ton courtier. Les tickers type « CW8 » ne marchent pas. Cours en euros, place de Paris en priorité, sans clé ni limite.</p>` : ''}`;
 }
 function bindEditor(){
   const a = draft;
@@ -619,13 +610,15 @@ async function doSearch(qs){
       const r = await fetchJSON('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(qs));
       searchRes = (r.coins || []).slice(0, 8).map(c => ({src:'cg', id:c.id, sym:(c.symbol || '').toUpperCase(), name:c.name}));
     } else {
-      const r = await fetchJSON('https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=' + encodeURIComponent(qs) + '&apikey=' + encodeURIComponent(S.settings.avKey));
-      if (r.Note || r.Information) throw new RateLimit(r.Note || r.Information);
-      searchRes = (r.bestMatches || []).slice(0, 8).map(m => ({src:'av', id:m['1. symbol'], sym:m['1. symbol'], name:m['2. name'], region:m['4. region'], cur:m['8. currency']}));
+      const r = await fetchJSON(OV + 'instruments/search/facet?searchValue=' + encodeURIComponent(qs));
+      const seen = new Set();
+      searchRes = (r.facets || []).filter(f => ['ETF', 'FUND', 'STOCK'].includes(f.type)).flatMap(f => f.results || [])
+        .filter(x => x && x.entityValue && !seen.has(x.entityValue) && seen.add(x.entityValue)).slice(0, 10)
+        .map(x => ({src:'ov', id:String(x.entityValue), type:x.entityType, sym:x.name, name:(x.isin || '') + (x.entityType === 'STOCK' ? ' · Action' : ' · ETF / fonds')}));
     }
     if (!searchRes.length) toast('Aucun résultat');
   } catch (e) {
-    toast(e instanceof RateLimit ? 'Limite Alpha Vantage atteinte ou clé invalide.' : 'Recherche impossible (connexion ?)');
+    toast('Recherche impossible (connexion ?)');
   }
   searching = false;
   if (draft) { renderEditor(); const q = $('#edQ'); if (q) q.value = qs; }
@@ -633,15 +626,15 @@ async function doSearch(qs){
 async function pick(r){
   if (!r || !draft) return;
   draft.positions = draft.positions || [];
-  if (!draft.positions.some(p => p.src === r.src && p.id === r.id)) draft.positions.push({src:r.src, id:r.id, sym:r.sym, name:r.name, cur:r.cur || '', region:r.region || '', qty:0});
+  if (!draft.positions.some(p => p.src === r.src && p.id === r.id)) draft.positions.push({src:r.src, id:r.id, type:r.type || '', sym:r.sym, name:r.name, qty:0});
   searchRes = []; renderEditor();
   const inputs = document.querySelectorAll('[data-q]'); const last = inputs[inputs.length - 1]; if (last) last.focus();
   try {
     if (r.src === 'cg') await cgPrices([r.id]);
-    else { if (normCur(r.cur) !== 'EUR' && !(S.fx.rates && S.fx.rates[normCur(r.cur) === 'GBX' ? 'GBP' : normCur(r.cur)])) await refreshFx(); await avQuote(r.id); }
+    else { await ovQuote(r); const c = normCur(S.prices['ov:' + r.id].cur); if (c !== 'EUR' && !(S.fx.rates && S.fx.rates[c === 'GBX' ? 'GBP' : c])) await refreshFx(); }
     save();
     if (draft) { const keep = [...document.querySelectorAll('[data-q]')].map(i => i.value); renderEditor(); document.querySelectorAll('[data-q]').forEach((i, n) => { if (keep[n] != null) i.value = keep[n]; }); }
-  } catch (e) { toast(e instanceof RateLimit ? 'Limite Alpha Vantage atteinte : le cours viendra plus tard.' : 'Cours indisponible pour le moment'); }
+  } catch (e) { toast('Cours indisponible pour le moment'); }
 }
 function saveDraft(){
   const a = draft; if (!a) return;
@@ -670,12 +663,6 @@ function openSettings(){
     </div>
     <p class="hint">${s.lock ? (s.credId ? 'Face ID actif. Le code sert si Face ID échoue.' : 'Verrouillage par code actif (Face ID indisponible sur cet appareil).') : "L'app demandera Face ID à chaque ouverture. Le code de secours sert si Face ID échoue."}</p>
 
-    <div class="group-title">Bourse — cours automatiques</div>
-    <div class="group">
-      <div class="field"><label for="avKey">Clé API</label><input id="avKey" class="left" placeholder="Colle ta clé Alpha Vantage" value="${esc(s.avKey)}" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
-    </div>
-    <p class="hint">Clé gratuite en 1 minute sur <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener">alphavantage.co</a> (25 mises à jour par jour, largement assez : l'app ne rafraîchit la bourse que toutes les 6 h). La crypto, elle, marche sans clé.</p>
-
     <div class="group-title">Sauvegarde</div>
     <div class="group">
       <button class="link-btn" style="border-top:0" id="stExport">Exporter une sauvegarde</button>
@@ -686,9 +673,9 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.0</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.1</p>
   </div>`);
-  $('#stDone').onclick = () => { const k = $('#avKey').value.trim(); if (k !== S.settings.avKey) { S.settings.avKey = k; save(); if (k) refreshPrices(false); } closeSheet(); render(); };
+  $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
     if (e.target.checked) { $('#lockSetup').hidden = false; $('#pin1').focus(); }
     else { $('#lockSetup').hidden = true; if (S.settings.lock) { Object.assign(S.settings, {lock:false, credId:'', pinHash:'', pinSalt:'', pinLen:0}); save(); toast('Verrouillage désactivé'); } }
