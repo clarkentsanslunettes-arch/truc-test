@@ -171,6 +171,15 @@ body.veil main,body.veil .sheet-wrap,body.veil .tabbar{filter:blur(24px)}
 .switch input:checked+span{background:#34c759}
 .switch input:checked+span:before{transform:translateX(20px)}
 
+/* fenêtre de confirmation (remplace confirm(), bloqué dans les web apps iPhone) */
+.dlg-wrap{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.6);animation:fade .15s}
+.dlg{background:#1c1c24;border:1px solid var(--line);border-radius:22px;padding:22px 18px 16px;width:100%;max-width:340px;text-align:center}
+.dlg p{margin:0 0 18px;font-size:16px;line-height:1.4}
+.dlg .btns{display:flex;gap:10px}
+.dlg .btns button{flex:1;padding:13px;border-radius:999px;font-weight:650;background:var(--card2)}
+.dlg .btns .ok{background:var(--accent-strong);color:#fff}
+.dlg .btns .ok.danger{background:#e5484d}
+
 /* verrouillage */
 .lock{position:fixed;inset:0;z-index:50;background:radial-gradient(70% 45% at 50% 32%,rgba(90,70,230,.55) 0%,rgba(90,70,230,0) 70%),var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
 .lock .big-logo{width:86px;height:86px;border-radius:50%;background:linear-gradient(150deg,#3a5cff,#a93cf2);color:#fff;font-weight:800;font-size:32px;display:grid;place-items:center;letter-spacing:-1px;box-shadow:0 12px 40px rgba(110,70,240,.5)}
@@ -598,6 +607,17 @@ function openSheet(html, onClose){
 }
 function closeSheet(){ $('#sheet').hidden = true; $('#sheetInner').innerHTML = ''; document.body.style.overflow = ''; const f = sheetClose; sheetClose = null; f && f(); }
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+function askConfirm(msg, okLabel = 'Confirmer', danger = false){
+  return new Promise(res => {
+    const w = document.createElement('div'); w.className = 'dlg-wrap';
+    w.innerHTML = `<div class="dlg" role="alertdialog"><p>${esc(msg)}</p><div class="btns"><button class="no">Annuler</button><button class="ok${danger ? ' danger' : ''}">${esc(okLabel)}</button></div></div>`;
+    const done = v => { w.remove(); res(v); };
+    w.querySelector('.no').onclick = () => done(false);
+    w.querySelector('.ok').onclick = () => done(true);
+    w.onclick = e => { if (e.target === w) done(false); };
+    document.body.appendChild(w);
+  });
+}
 
 /* ---------- éditeur de compte ---------- */
 let draft = null, searchRes = [], searching = false;
@@ -660,8 +680,8 @@ function bindEditor(){
   const q = $('#edQ'), sb = $('#edSearch');
   if (q) { q.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(q.value); } }; sb.onclick = () => doSearch(q.value); }
   document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => pick(searchRes[+b.dataset.pick]));
-  const del = $('#edDel'); if (del) del.onclick = () => {
-    if (!confirm('Supprimer « ' + (a.name || CAT[a.cat].one) + ' » ?')) return;
+  const del = $('#edDel'); if (del) del.onclick = async () => {
+    if (!await askConfirm('Supprimer « ' + (a.name || CAT[a.cat].one) + ' » ?', 'Supprimer', true)) return;
     const before = totals(); S.accounts = S.accounts.filter(x => x.id !== a.id); recordFlow(before); save(); snapshot(); closeSheet(); render(); toast('Compte supprimé');
   };
 }
@@ -750,7 +770,7 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.1</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.2</p>
   </div>`);
   $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
@@ -761,9 +781,9 @@ function openSettings(){
   $('#stExport').onclick = exportData;
   $('#stImport').onclick = () => $('#stFile').click();
   $('#stFile').onchange = importData;
-  $('#stWipe').onclick = () => {
-    if (!confirm('Effacer tous tes comptes et ton historique ? (Pense à exporter une sauvegarde avant.)')) return;
-    if (!confirm('Vraiment tout effacer ? Ce n’est pas réversible.')) return;
+  $('#stWipe').onclick = async () => {
+    if (!await askConfirm('Effacer tous tes comptes et ton historique ? Pense à exporter une sauvegarde avant.', 'Continuer', true)) return;
+    if (!await askConfirm('Vraiment tout effacer ? Ce n’est pas réversible.', 'Tout effacer', true)) return;
     S = clone(DEFAULT); save(); closeSheet(); render(); toast('Données effacées');
   };
 }
@@ -847,7 +867,7 @@ async function importData(e){
   try {
     const d = JSON.parse(await f.text());
     if (!d || !Array.isArray(d.accounts) || !Array.isArray(d.history)) throw new Error('format');
-    if (!confirm('Remplacer tes données actuelles par cette sauvegarde (' + d.accounts.length + ' comptes) ?')) return;
+    if (!await askConfirm('Remplacer tes données actuelles par cette sauvegarde (' + d.accounts.length + ' comptes) ?', 'Remplacer', true)) return;
     const keep = {lock:S.settings.lock, credId:S.settings.credId, pinHash:S.settings.pinHash, pinSalt:S.settings.pinSalt, pinLen:S.settings.pinLen};
     localStorage.setItem(KEY, JSON.stringify(d)); S = load(); migrateFlows(); Object.assign(S.settings, keep); save();
     closeSheet(); render(); refreshPrices(true); toast('Sauvegarde importée');
