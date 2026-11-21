@@ -610,10 +610,23 @@ async function doSearch(qs){
       const r = await fetchJSON('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(qs));
       searchRes = (r.coins || []).slice(0, 8).map(c => ({src:'cg', id:c.id, sym:(c.symbol || '').toUpperCase(), name:c.name}));
     } else {
-      const r = await fetchJSON(OV + 'instruments/search/facet?searchValue=' + encodeURIComponent(qs));
-      const seen = new Set();
-      searchRes = (r.facets || []).filter(f => ['ETF', 'FUND', 'STOCK'].includes(f.type)).flatMap(f => f.results || [])
-        .filter(x => x && x.entityValue && !seen.has(x.entityValue) && seen.add(x.entityValue)).slice(0, 10)
+      // le nom affiché par Trade Republic ne colle pas toujours : on réessaie avec un nom simplifié
+      const seen = new Set(), found = [];
+      const clean = qs.replace(/\([^)]*\)/g, ' ').replace(/\b(ucits|etf|eur|usd|acc|dist?|c|d)\b/gi, ' ').replace(/[^\p{L}\p{N}&]+/gu, ' ').replace(/\s+/g, ' ').trim();
+      for (const v of [...new Set([qs, clean, clean.replace(/\bcore\b/gi, ' ').replace(/\s+/g, ' ').trim()])]) {
+        if (!v || found.length >= 6) continue;
+        const r = await fetchJSON(OV + 'instruments/search/facet?searchValue=' + encodeURIComponent(v));
+        for (const x of (r.facets || []).filter(f => ['ETF', 'FUND', 'STOCK'].includes(f.type)).flatMap(f => f.results || []))
+          if (x && x.entityValue && !seen.has(x.entityValue)) { seen.add(x.entityValue); found.push(x); }
+      }
+      const ql = qs.toLowerCase(), wantAcc = /\bacc|capi/.test(ql), wantDis = /\bdist?\b|distri/.test(ql);
+      const toks = clean.toLowerCase().split(' ').filter(t => t.length > 1);
+      const score = x => { const n = (x.name || '').toLowerCase(); let s = toks.filter(t => n.includes(t)).length;
+        if (wantAcc) s += /acc|\(c\)/.test(n) ? 3 : /dis|\(d\)/.test(n) ? -3 : 0;
+        if (wantDis) s += /dis|\(d\)/.test(n) ? 3 : /acc|\(c\)/.test(n) ? -3 : 0;
+        return s; };
+      found.sort((a, b) => score(b) - score(a));
+      searchRes = found.slice(0, 10)
         .map(x => ({src:'ov', id:String(x.entityValue), type:x.entityType, sym:x.name, name:(x.isin || '') + (x.entityType === 'STOCK' ? ' · Action' : ' · ETF / fonds')}));
     }
     if (!searchRes.length) toast('Aucun résultat');
@@ -673,7 +686,7 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.2</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.3</p>
   </div>`);
   $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
