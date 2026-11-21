@@ -336,10 +336,36 @@ function totals(){
 }
 function snapshot(){
   if (!S.accounts.length) return;
-  const t = totals(), d = today(), e = {d, t: t.total, c: t.byCat}, h = S.history;
+  migrateFlows();
+  const t = totals(), d = today(), e = {d, t: t.total, c: t.byCat, f: S.flows.total, fc: {...S.flows.byCat}}, h = S.history;
   if (h.length && h[h.length - 1].d === d) h[h.length - 1] = e; else h.push(e);
   h.sort((a, b) => a.d < b.d ? -1 : 1);
   save();
+}
+/* Ajouter, modifier ou supprimer un compte n'est pas un gain ni une perte : ces « mouvements » sont
+   cumulés dans S.flows et retirés des variations, qui ne reflètent donc que les cours. */
+const r2 = x => Math.round(x * 100) / 100;
+function migrateFlows(){
+  if (S.flows && typeof S.flows.total === 'number') return;
+  const h = S.history, h0 = h[0], t = totals(), c0 = (h0 && h0.c) || {};
+  S.flows = {total: 0, byCat: {}};
+  if (h0) {
+    for (const p of h) { p.f = r2(p.t - h0.t); p.fc = {}; for (const c of CATS) p.fc[c.id] = r2(((p.c && p.c[c.id]) || 0) - (c0[c.id] || 0)); }
+    S.flows.total = r2(t.total - h0.t);
+    for (const c of CATS) S.flows.byCat[c.id] = r2((t.byCat[c.id] || 0) - (c0[c.id] || 0));
+  }
+  save();
+}
+function recordFlow(before){
+  migrateFlows();
+  const after = totals();
+  S.flows.total = r2(S.flows.total + after.total - before.total);
+  for (const c of CATS) S.flows.byCat[c.id] = r2((S.flows.byCat[c.id] || 0) + (after.byCat[c.id] || 0) - (before.byCat[c.id] || 0));
+}
+function perfSince(p, value, cat){
+  const f0 = cat ? p.fc && p.fc[cat] : p.f, v0 = cat ? p.c && p.c[cat] : p.t;
+  if (typeof f0 !== 'number' || typeof v0 !== 'number') return null;
+  return (value - v0) - ((cat ? S.flows.byCat[cat] || 0 : S.flows.total) - f0);
 }
 const allPositions = src => S.accounts.flatMap(a => (a.positions || []).filter(p => p.src === src));
 
@@ -436,7 +462,7 @@ function render(){
         <div class="chart" id="lineChart"></div></section>
       <h2 class="sec-title">Par catégorie</h2>
       <section class="card list">${CATS.map(k => {
-        const v = t.byCat[k.id], f = first && first.c && typeof first.c[k.id] === 'number' ? first.c[k.id] : null, d = f == null ? null : v - f;
+        const v = t.byCat[k.id], d = first ? perfSince(first, v, k.id) : null;
         const cls = d == null || Math.abs(d) < 0.5 ? 'flat' : d > 0 ? 'up' : 'down';
         return `<div class="row-item">${catIcon(k.id)}<span class="main"><span class="name">${k.name}</span><span class="sub num">${eur(v)}</span></span><span class="chg num ${cls}">${d == null ? '—' : (d >= 0 ? '+' : '−') + eur(Math.abs(d))}</span></div>`;
       }).join('')}</section>`;
@@ -455,11 +481,12 @@ function rangePoints(){
 function renderDelta(total){
   const el = $('#delta'); const pts = rangePoints();
   if (pts.length < 2 || !S.accounts.length) { el.className = 'delta flat'; el.innerHTML = S.accounts.length ? '<span class="since">Le suivi commence aujourd’hui</span>' : ''; return; }
-  const first = pts[0].t, diff = total - first, rel = first ? diff / Math.abs(first) : 0;
+  migrateFlows();
+  const diff = perfSince(pts[0], total) || 0, base = total - diff, rel = base > 0 ? diff / base : 0;
   const cls = Math.abs(diff) < 0.5 ? 'flat' : diff > 0 ? 'up' : 'down';
   const icon = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '■';
   el.className = 'delta ' + cls;
-  el.innerHTML = `<span>${icon} ${diff >= 0 ? '+' : '−'}${eur(Math.abs(diff))} (${diff >= 0 ? '+' : '−'}${pct(Math.abs(rel))})</span><span class="since">depuis le ${longDate(pts[0].d)}</span>`;
+  el.innerHTML = `<span>${icon} ${diff >= 0 ? '+' : '−'}${eur(Math.abs(diff))} (${diff >= 0 ? '+' : '−'}${pct(Math.abs(rel))})</span><span class="since">de variation des cours depuis le ${longDate(pts[0].d)}</span>`;
 }
 function catBlock(k, t){
   const accs = S.accounts.filter(a => a.cat === k.id);
@@ -635,7 +662,7 @@ function bindEditor(){
   document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => pick(searchRes[+b.dataset.pick]));
   const del = $('#edDel'); if (del) del.onclick = () => {
     if (!confirm('Supprimer « ' + (a.name || CAT[a.cat].one) + ' » ?')) return;
-    S.accounts = S.accounts.filter(x => x.id !== a.id); save(); snapshot(); closeSheet(); render(); toast('Compte supprimé');
+    const before = totals(); S.accounts = S.accounts.filter(x => x.id !== a.id); recordFlow(before); save(); snapshot(); closeSheet(); render(); toast('Compte supprimé');
   };
 }
 async function doSearch(qs){
@@ -690,8 +717,9 @@ function saveDraft(){
   a.name = (a.name || '').trim() || CAT[a.cat].one;
   a.positions = a.positions || [];
   const isNew = a._new; delete a._new;
+  const before = totals();
   if (isNew) S.accounts.push(a); else S.accounts = S.accounts.map(x => x.id === a.id ? a : x);
-  save(); snapshot(); closeSheet(); render();
+  recordFlow(before); save(); snapshot(); closeSheet(); render();
   toast(isNew ? 'Compte ajouté' : 'Enregistré');
 }
 
@@ -722,7 +750,7 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.0</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v2.1</p>
   </div>`);
   $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
@@ -821,7 +849,7 @@ async function importData(e){
     if (!d || !Array.isArray(d.accounts) || !Array.isArray(d.history)) throw new Error('format');
     if (!confirm('Remplacer tes données actuelles par cette sauvegarde (' + d.accounts.length + ' comptes) ?')) return;
     const keep = {lock:S.settings.lock, credId:S.settings.credId, pinHash:S.settings.pinHash, pinSalt:S.settings.pinSalt, pinLen:S.settings.pinLen};
-    localStorage.setItem(KEY, JSON.stringify(d)); S = load(); Object.assign(S.settings, keep); save();
+    localStorage.setItem(KEY, JSON.stringify(d)); S = load(); migrateFlows(); Object.assign(S.settings, keep); save();
     closeSheet(); render(); refreshPrices(true); toast('Sauvegarde importée');
   } catch (err) { toast('Fichier de sauvegarde invalide'); }
 }
