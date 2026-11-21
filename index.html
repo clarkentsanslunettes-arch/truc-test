@@ -351,7 +351,7 @@ async function ovQuote(p){
   const list = ((j.quoteList && j.quoteList.list) || []).filter(q => q && typeof q.last === 'number');
   const code = q => q.market && q.market.codeMarket;
   const eurs = list.filter(q => q.isoCurrency === 'EUR').sort((a, b) => String(b.datetimeLast || '').localeCompare(String(a.datetimeLast || '')));
-  const best = eurs.find(q => code(q) === '_PAR') || eurs.find(q => code(q) === '_GER') || eurs[0] || j.quote;
+  const best = eurs.find(q => code(q) === '_LSX') || eurs[0] || j.quote;   // LS Exchange = bourse de Trade Republic, sinon le cours EUR le plus récent
   if (!best || typeof best.last !== 'number') throw new Error('vide');
   S.prices['ov:' + p.id] = {p: best.last, cur: best.isoCurrency || 'EUR', t: Date.now(), venue: (best.market && best.market.name) || ''};
 }
@@ -577,7 +577,7 @@ function posSection(a){
     <div class="search"><input id="edQ" placeholder="${isC ? 'Ex : bitcoin, ETH, solana' : 'Nom ou ISIN, ex : Amundi MSCI World'}" autocomplete="off" enterkeyhint="search"><button class="btn" id="edSearch">${searching ? '…' : 'Chercher'}</button></div>
     <div class="results">${searchRes.map((r, i) => `<button data-pick="${i}"><span style="min-width:0;display:block"><span class="t" style="display:block">${esc(r.sym)}</span><span class="s">${esc(r.name)}</span></span></button>`).join('')}</div>
   </div>
-  ${!isC ? `<p class="hint">Cherche par nom ou, plus sûr, par code ISIN (12 caractères, ex : LU1681043599) : il est affiché dans l'appli de ton courtier. Les tickers type « CW8 » ne marchent pas. Cours en euros, place de Paris en priorité, sans clé ni limite.</p>` : ''}`;
+  ${!isC ? `<p class="hint">Cherche par nom ou, plus sûr, par code ISIN (12 caractères, ex : LU1681043599) : il est affiché dans l'appli de ton courtier. Les tickers type « CW8 » ne marchent pas. Cours en euros, sur la même bourse que Trade Republic (LS Exchange), sans clé ni limite.</p>` : ''}`;
 }
 function bindEditor(){
   const a = draft;
@@ -673,7 +673,7 @@ function openSettings(){
 
     <div class="group-title">Données</div>
     <div class="group"><button class="link-btn" style="border-top:0;color:var(--bad)" id="stWipe">Tout effacer</button></div>
-    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.1</p>
+    <p class="hint" style="text-align:center;margin-top:24px">Mon Patrimoine · v1.2</p>
   </div>`);
   $('#stDone').onclick = () => { closeSheet(); render(); };
   $('#stLock').onchange = e => {
